@@ -20,6 +20,17 @@ var (
 	badCipher = "BF-CBC"
 )
 
+var banList = []string{}
+
+func knownIP(ip string) bool {
+	for _, i := range banList {
+		if ip == i {
+			return true
+		}
+	}
+	return false
+}
+
 // CLIENT_LIST	UNDEF	5.119.24.29:38511			14	92	2022-10-02 21:34:43	1664746483	UNDEF	559	0	BF-CBC
 
 func collectStatusFromFile(statusPath string, badActorCh chan string) error {
@@ -100,17 +111,18 @@ func main() {
 		select {
 		case event := <-watcher.Events:
 			ch := make(chan string, 100)
-			//log.Println("event:", event)
 			if event.Op&fsnotify.Write == fsnotify.Write {
 				go collectStatusFromFile(statusLog, ch)
 				for ip := range ch {
-					log.Println("bad ip", ip)
-					ban.WriteString(fmt.Sprintf("bad ip: %s\n", ip))
+					if !knownIP(ip) {
+						log.Println("bad ip", ip)
+						ban.WriteString(ip)
+						banList = append(banList, ip)
+					}
 				}
 			}
 		case err := <-watcher.Errors:
 			log.Println("error:", err)
 		}
 	}
-
 }
