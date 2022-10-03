@@ -4,12 +4,14 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/kouhin/envflag"
@@ -100,7 +102,19 @@ func main() {
 		panic(err)
 	}
 
-	log.Println("vpn-watch")
+	for i := 0; i < 12; i += 1 {
+		if _, err := os.Stat(*statusLog); err == nil {
+			break
+		}
+		log.Println("Status file not found, retry...")
+		time.Sleep(5 * time.Second)
+	}
+	if _, err := os.Stat(*statusLog); errors.Is(err, os.ErrNotExist) {
+		log.Println("Fatal: Cannot open status file at", *statusLog)
+		os.Exit(1)
+	}
+
+	log.Println("Started vpn-watch")
 
 	ban, err := os.OpenFile(*banLog, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0600)
 	if err != nil {
