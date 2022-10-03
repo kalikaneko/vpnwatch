@@ -4,6 +4,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -11,13 +12,14 @@ import (
 	"strings"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/kouhin/envflag"
 )
 
 var (
-	statusLog = "/tmp/openvpn-status-tcp"
-	banLog    = "/tmp/openvpn-banlist"
-	certUndef = "UNDEF"
-	badCipher = "BF-CBC"
+	defaultStatusLog = "/tmp/openvpn-status-tcp"
+	defaultBanLog    = "/tmp/openvpn-banlist"
+	certUndef        = "UNDEF"
+	badCipher        = "BF-CBC"
 )
 
 var banList = []string{}
@@ -90,8 +92,17 @@ func getIP(addr string) (string, error) {
 }
 
 func main() {
+	var (
+		statusLog = flag.String("status-log", defaultStatusLog, "Status log file")
+		banLog    = flag.String("ban-log", defaultBanLog, "Ban log file")
+	)
+	if err := envflag.Parse(); err != nil {
+		panic(err)
+	}
+
 	log.Println("vpn-watch")
-	ban, err := os.OpenFile(banLog, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0600)
+
+	ban, err := os.OpenFile(*banLog, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0600)
 	if err != nil {
 		fmt.Println("Unable to open file:", banLog)
 		os.Exit(1)
@@ -102,7 +113,7 @@ func main() {
 	}
 	defer watcher.Close()
 	// TODO check that file exists
-	err = watcher.Add(statusLog)
+	err = watcher.Add(*statusLog)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -112,11 +123,11 @@ func main() {
 		case event := <-watcher.Events:
 			ch := make(chan string, 100)
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				go collectStatusFromFile(statusLog, ch)
+				go collectStatusFromFile(*statusLog, ch)
 				for ip := range ch {
 					if !knownIP(ip) {
 						log.Println("bad ip", ip)
-						ban.WriteString(ip)
+						ban.WriteString(fmt.Sprintf("%s\n", ip))
 						banList = append(banList, ip)
 					}
 				}
