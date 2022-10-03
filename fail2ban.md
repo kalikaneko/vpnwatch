@@ -5,7 +5,7 @@ Create /etc/fail2ban/filter.d/openvpn.local containing:
 
 [Definition]
 
-failregex = ^bad ip:\d+$
+failregex = ^\d+$
 ignoreregex = 
 ```
 
@@ -19,6 +19,6 @@ enabled  = true
 port     = 1194
 protocol = tcp
 filter   = openvpn
-logpath  = /tmp/openvp-status-tcp
+logpath  = /tmp/openvpn-banlist
 maxretry = 1
 ```
