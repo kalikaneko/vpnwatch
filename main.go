@@ -9,6 +9,8 @@ import (
 	"log"
 	"os"
 	"strings"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 var (
@@ -38,12 +40,10 @@ func collectServerStatusFromReader(file io.Reader, badActorCh chan string) error
 		if fields[0] != "CLIENT_LIST" {
 			continue
 		}
-		cert := fields[1]
-		addr := fields[2]
-		log.Println("cert:", cert)
-		if cert != "UNDEF" {
+		if cert := fields[1]; cert != "UNDEF" {
 			continue
 		}
+		addr := fields[2]
 		ip, err := getIP(addr)
 		if err != nil {
 			log.Println("error parsing", addr)
@@ -85,10 +85,32 @@ func main() {
 		fmt.Println("Unable to open file:", banLog)
 		os.Exit(1)
 	}
-	ch := make(chan string, 1000)
-	go collectStatusFromFile(statusLog, ch)
-	for ip := range ch {
-		log.Println("bad ip", ip)
-		ban.WriteString(fmt.Sprintf("bad ip: %s\n", ip))
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
 	}
+	defer watcher.Close()
+	// TODO check that file exists
+	err = watcher.Add(statusLog)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for {
+		select {
+		case event := <-watcher.Events:
+			ch := make(chan string, 100)
+			//log.Println("event:", event)
+			if event.Op&fsnotify.Write == fsnotify.Write {
+				go collectStatusFromFile(statusLog, ch)
+				for ip := range ch {
+					log.Println("bad ip", ip)
+					ban.WriteString(fmt.Sprintf("bad ip: %s\n", ip))
+				}
+			}
+		case err := <-watcher.Errors:
+			log.Println("error:", err)
+		}
+	}
+
 }
